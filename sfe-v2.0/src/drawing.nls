@@ -1,0 +1,106 @@
+globals [ mouse-one-click? ]
+
+to draw
+  if agent = "drone"
+  [ draw-drone ]
+  if agent = "obstacle"
+  [ draw-obstacle ]
+  if agent = "target"
+  [ draw-target ]
+end
+
+;; draw one drone with a click of the mouse
+to draw-drone
+  if mouse-down? and not mouse-one-click?
+  [ create-drones 1
+    [ set color green
+      set size 3
+      setxy mouse-xcor mouse-ycor
+      set sighted-obstacles no-patches
+      set locked-patches no-patches
+      set last-xcor xcor
+      set last-ycor ycor
+      set stuck-ticks 0
+      set speed 0
+      set yaw 0
+      set detector? false ]
+    set mouse-one-click? true
+    display ]
+  if not mouse-down?
+  [ set mouse-one-click? false ]
+end
+
+;; draw one obstacle with a click of the mouse
+to draw-obstacle
+  if mouse-down?
+  [ ask patch mouse-xcor mouse-ycor
+    [ set pcolor gray
+      set obstacle true
+      set locker-id -1
+      set visited 0
+      set target false
+      set state "null"
+      set target-intensity 0 ]
+    display ]
+end
+
+;; draw one target with a click of the mouse
+to draw-target
+  if mouse-down?
+  [ ask patch mouse-xcor mouse-ycor
+    [ set pcolor red
+      set obstacle false
+      set locker-id -1
+      set visited 0
+      set target true
+      set state "not-detected"
+      set target-intensity 1 ]
+    display ]
+end
+
+to delete
+  if agent = "drone"
+  [ delete-drone ]
+  if agent = "obstacle"
+  [ delete-obstacle ]
+  if agent = "target"
+  [ delete-target ]
+end
+
+;; delete one drone from the world with a click of the mouse
+to delete-drone
+  if mouse-down?
+  [ ask patches with [ distancexy mouse-xcor mouse-ycor < 1 ]
+    [ if drones-here != no-turtles [ ask one-of drones-here [ die ] ] ]
+    display ]
+end
+
+;; delete one obstacle from the world with a click of the mouse
+to delete-obstacle
+  if mouse-down?
+  [ ask patches with [ pcolor = gray and distancexy mouse-xcor mouse-ycor < 1 ]
+    [ set pcolor black
+      set obstacle false
+      set locker-id -1
+      set visited 0
+      set target false
+      set state "null"
+      set target-intensity 0 ]
+    display ]
+end
+
+;; delete one target from the world with a click of the mouse
+to delete-target
+  if mouse-down?
+  [ ask patches with [ pcolor = red and distancexy mouse-xcor mouse-ycor < 1 ]
+    [ set pcolor black
+      set obstacle false
+      set locker-id -1
+      set visited 0
+      set target false
+      set state "null"
+      set target-intensity 0 ]
+    display ]
+end
+
+; Copyright 2020 Manilo Monaco.

@@ -1,0 +1,112 @@
+globals [
+  flock-angle
+  separate-radius
+  max-separate-turn
+  align-radius
+  max-align-turn
+  cohere-radius
+  max-cohere-turn
+]
+
+to-report flocking-behavior?
+  if flocking?
+  [ report flock? ]
+  report false
+end
+
+to-report flock?
+  find-flockmates
+  ifelse any? flockmates
+  [ find-nearest-flockmate
+    if-else distance nearest-flockmate < separate-radius
+    [ separate
+      report true ]
+    [ if-else distance nearest-flockmate < align-radius
+      [ align
+        report true ]
+      [ cohere
+        report true ] ] ]
+  [ set nearest-flockmate nobody ]
+  report false
+end
+
+;; find the flockmates within the cohere cone
+to find-flockmates
+  set flockmates other drones in-cone cohere-radius flock-angle
+end
+
+to find-nearest-flockmate
+  set nearest-flockmate min-one-of flockmates [ distance myself ]
+end
+
+;;;;;;;;;;;;;;;;
+;;; SEPARATE ;;;
+;;;;;;;;;;;;;;;;
+
+to separate
+  turn-away ([ heading ] of nearest-flockmate) max-separate-turn
+end
+
+;;;;;;;;;;;;;
+;;; ALIGN ;;;
+;;;;;;;;;;;;;
+
+to align
+  turn-towards average-flockmates-heading max-align-turn
+end
+
+;; return the average heading of the flockmates
+to-report average-flockmates-heading
+  ;; We can't just average the heading variables here.
+  ;; For example, the average of 1 and 359 should be 0,
+  ;; not 180.  So we have to use trigonometry.
+  let x-component sum [dx] of flockmates
+  let y-component sum [dy] of flockmates
+  if-else x-component = 0 and y-component = 0
+  [ report heading ]
+  [ report atan x-component y-component ]
+end
+
+;;;;;;;;;;;;;;
+;;; COHERE ;;;
+;;;;;;;;;;;;;;
+
+to cohere
+  turn-towards average-heading-towards-flockmates max-cohere-turn
+end
+
+;; return the average heading towards the flockmates
+to-report average-heading-towards-flockmates
+  ;; "towards myself" gives us the heading from the other drone
+  ;; to me, but we want the heading from me to the other drone,
+  ;; so we add 180
+  let x-component mean [sin (towards myself + 180)] of flockmates
+  let y-component mean [cos (towards myself + 180)] of flockmates
+  if-else x-component = 0 and y-component = 0
+  [ report heading ]
+  [ report atan x-component y-component ]
+end
+
+;;;;;;;;;;;;;;;
+;;; UTILITY ;;;
+;;;;;;;;;;;;;;;
+
+to turn-away [ new-heading max-turn ]
+  turn-at-most (subtract-headings heading new-heading) max-turn
+end
+
+to turn-towards [ new-heading max-turn ]
+  turn-at-most (subtract-headings new-heading heading) max-turn
+end
+
+;; turn right by "turn" degrees (or left if "turn" is negative),
+;; but never turn more than "max-turn" degrees
+to turn-at-most [ turn max-turn ]
+  if-else abs turn > max-turn
+  [ if-else turn > 0
+    [ rotate max-turn ]
+    [ rotate (-1 * max-turn) ] ]
+  [ rotate turn ]
+end
+
+; Copyright 2020 Manilo Monaco.

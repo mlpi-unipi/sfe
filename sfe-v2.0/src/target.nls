@@ -1,0 +1,125 @@
+globals [
+  drone-sensing-radius
+  drone-sensing-angle
+  drone-sensing-base
+  drone-sensing-height
+  target-percentage-threshold
+]
+
+patches-own [
+  target
+  state
+]
+
+;; return the nearest target detected in the sensing area
+to-report detected-target
+  let sensed-targets target-in-sensing-area
+  ;; get the list of sensed targets, ordered by distance from drone
+  set sensed-targets sort-on [ distance myself ] sensed-targets
+  let nearest-target nobody
+  ;; if the sensed target is hidden by an obstacle, then remove the agent from the agentset
+  foreach sensed-targets
+  [ target-patch ->
+    if hidden-by-obstacle? target-patch
+    [ set sensed-targets remove target-patch sensed-targets ] ]
+  if not empty? sensed-targets
+  [ set nearest-target first sensed-targets
+    ask nearest-target
+    [ set-detected ] ]
+  report nearest-target
+end
+
+;; return an agentset of the targets in sensing area
+to-report target-in-sensing-area
+  ifelse drone-sensing-angle = 0
+  [ report target-in-sensing-rectangle ]
+  [ report target-in-sensing-cone ]
+end
+
+;; return an agentset of the targets in sensing cone
+to-report target-in-sensing-cone
+  report patches in-cone drone-sensing-radius drone-sensing-angle with [ pcolor >= red and pcolor < red + 3 ]
+end
+
+;; return an agentset of the targets in sensing rectangle
+to-report target-in-sensing-rectangle
+  let sensing-diagonal sqrt (drone-sensing-base ^ 2 + drone-sensing-height ^ 2)
+  let sensed-targets no-patches
+  ask patches in-radius (sensing-diagonal / 2)
+  [ if in-rectangle pxcor pycor [ xcor ] of myself [ ycor ] of myself drone-sensing-base drone-sensing-height [ heading ] of myself and (pcolor >= red and pcolor < red + 3)
+    [ set sensed-targets (patch-set sensed-targets self) ] ]
+  report sensed-targets
+end
+
+;; check if the patch coordinates lies inside the rectangle rotated in the direction of heading and with center in current drone coordinates
+;; (xp, yp): patch coordinates, (xd, yd): drone coordinates, base: base of the rectangle, height: height of the rectangle, direction: rotation of the rectangle
+to-report in-rectangle [ xp yp xd yd base height direction ]
+  ;; calculate the coordinates of the patch rotated by an angle equal to heading
+  let xpr ((xp - xd) * cos direction) - ((yp - yd) * sin direction) + xd
+  let ypr ((xp - xd) * sin direction) + ((yp - yd) * cos direction) + yd
+  ;; check if the rotated patch lies inside the rectangle (this uses the constraints of the rectangle parallel to the axes)
+  ifelse xpr < round (xd + (base / 2)) and xpr > round (xd - (base / 2)) and ypr < round (yd + (height / 2)) and ypr > round (yd - (height / 2))
+  [ report true ]
+  [ report false ]
+end
+
+;; check if the target is hidden by an obstacle
+to-report hidden-by-obstacle? [ target-patch ]
+  let target-angles heading-points-angles four-coordinates target-patch
+  set target-angles sort target-angles
+  let distance-to-target distance target-patch
+  let obstacles patches in-radius distance-to-target with [ obstacle = true ]
+  ;; convert the agentset in a list
+  set obstacles sort-on [ distancexy [ pxcor ] of target-patch [ pycor ] of target-patch ] obstacles
+  let obstacles-angles []
+  foreach obstacles [ obstacle-patch -> set obstacles-angles lput (heading-points-angles four-coordinates obstacle-patch) obstacles-angles ]
+  ;; obstacles-angles is a list of lists of angles
+  foreach obstacles-angles
+  [ obstacle-angles -> ;; obstacle-angles is a list of four angles
+    let o-index 0
+    while [ o-index < length obstacle-angles ]
+    [ let angle item o-index obstacle-angles ;; get a single angle between the drone and a point of obstacle
+      let t-index 1
+      ;; for each consecutive pair of angles, check if an obstacle is interposed
+      while [ t-index < length target-angles ]
+      [ ;; item t-index target-angles is an angle between the drone and a point of target
+        if angle >= item (t-index - 1) target-angles and angle <= item t-index target-angles
+        [ report true ] ;; the drone has an obstacle that prevents target detection
+        set t-index t-index + 1 ]
+      set o-index o-index + 1 ] ]
+  report false
+end
+
+;; return a list of angles between drone heading and points
+to-report heading-points-angles [ points ]
+  let angles-list []
+  ;; points is a list of lists of coordinates
+  foreach points
+  [ point ->
+    let x first point
+    let y last point
+    if x != xcor or y != ycor
+    [ ;; get angle between drone heading and point in position x y
+      let angle subtract-headings towardsxy x y heading
+      set angles-list lput angle angles-list ] ]
+  report angles-list
+end
+
+;; return the four coordinates of the square of the patch (a list of lists of coordinates)
+to-report four-coordinates [ square-patch ]
+  let x-- list ([ pxcor ] of square-patch - 0.5) ([ pycor ] of square-patch - 0.5)
+  let x-+ list ([ pxcor ] of square-patch - 0.5) ([ pycor ] of square-patch + 0.5)
+  let x+- list ([ pxcor ] of square-patch + 0.5) ([ pycor ] of square-patch - 0.5)
+  let x++ list ([ pxcor ] of square-patch + 0.5) ([ pycor ] of square-patch + 0.5)
+  report (list x-- x-+ x+- x++)
+end
+
+;; set a target as detected
+to set-detected
+  set state "detected"
+  set pcolor yellow
+  ask myself
+  [ set detector? true ]
+end
+
+; Copyright 2020 Manilo Monaco.

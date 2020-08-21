@@ -1,0 +1,90 @@
+globals [
+  target-evolution-time
+  target-time-slot
+  target-average-percentage
+  target-max-intensity
+  target-min-intensity
+]
+
+patches-own [
+  target-evolution ;; list of target intensities in each frame
+  target-intensity
+]
+
+;; perform the evolution of the target in a dynamic scenario
+to check-dynamic-target
+  if dynamic-scenario?
+  [ let transition-period target-evolution-time / count-frames
+    if (ticks > 0) and (remainder ticks transition-period = 0)
+    [ set target-time-slot target-time-slot + 1
+      if target-time-slot >= 0 and target-time-slot < count-frames
+      [ update-target
+        update-plot ] ] ]
+end
+
+;; check if the environment models a dynamic scenario
+to-report dynamic-scenario?
+  ifelse target-evolution-time > 0 and is-list? [ target-evolution ] of one-of patches with [ obstacle = false ]
+  [ report true ]
+  [ report false ]
+end
+
+;; count the number of frames available in the dynamic scenario
+to-report count-frames
+  report length [ target-evolution ] of one-of patches with [ obstacle = false ]
+end
+
+to update-target
+  ask patches with [ obstacle = false ]
+  [ ifelse item target-time-slot target-evolution > 0
+    [ set target-intensity item target-time-slot target-evolution
+      set target true
+      set state "not-detected" ]
+    [ set target-intensity 0
+      set target false
+      set state "null" ] ]
+  update-target-pcolor
+end
+
+to update-target-pcolor
+  ask patches with [ target-intensity = 0 and obstacle = false ]
+  [ set pcolor black ]
+  ask patches with [ target-intensity > 0 ]
+  [ set pcolor calculate-pcolor target-intensity red ]
+end
+
+to-report calculate-pcolor [ intensity basic-pcolor ]
+  ifelse target-max-intensity = target-min-intensity
+  [ report basic-pcolor ]
+  [ let relative-intensity intensity - target-min-intensity
+    let offset 4.9 - (4.9 * (relative-intensity / (target-max-intensity - target-min-intensity)))
+    report basic-pcolor - offset ]
+end
+
+to update-plot
+  clear-plot
+  set-plot-x-range ticks ticks + 600
+end
+
+;; update the average percentage of the detected target
+to check-performance
+  ifelse dynamic-scenario?
+  [ if target-time-slot >= 0 and end-time-slot?
+    [ set target-average-percentage calculate-average-percentage ] ]
+  [ set target-average-percentage detected-target-percentage ]
+end
+
+to-report end-time-slot?
+  let transition-period target-evolution-time / count-frames
+  ifelse remainder (ticks + 1) transition-period = 0
+  [ report true ]
+  [ report false ]
+end
+
+to-report calculate-average-percentage
+  let count-percentage target-average-percentage * target-time-slot
+  set count-percentage count-percentage + detected-target-percentage
+  report count-percentage / (target-time-slot + 1)
+end
+
+; Copyright 2020 Manilo Monaco.
