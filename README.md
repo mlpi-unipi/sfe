@@ -13,14 +13,17 @@ PyNetLogo: Linking NetLogo with Python.
 Journal of Artificial Societies and Social Simulation, 21 (2) 4.
 http://jasss.soc.surrey.ac.uk/21/2/4.html.
 DOI: 10.18564/jasss.3668.
+
 <a id="2">[2]</a>
-Chathika Gunaratne and Ivan Garibay, 2018.
+Chathika Gunaratne and Ivan Garibay (2018).
 NL4Py: Agent-Based Modeling in Python with Parallelizable NetLogo Workspaces.
 arXiv preprint arXiv:1808.03292.
+
 <a id="3">[3]</a>
 Gunaratne, C. (2018).
 NL4Py.
 https://github.com/chathika/NL4Py.
 Complex Adaptive Systems Lab, University of Central Florida, Orlando, FL.
+
 <a id="4">[4]</a>
 https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html.
