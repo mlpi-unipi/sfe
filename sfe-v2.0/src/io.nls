@@ -111,7 +111,7 @@ to save
   [ save-obstacles ]
   if agents = "targets"
   [ save-targets ]
-  if agents = "all"
+  if agents = "everything"
   [ let output-file user-new-file ;; manually selected by the user
     if is-string? output-file
     [ export-world output-file ] ]
@@ -168,7 +168,7 @@ to load
   [ load-obstacles ]
   if agents = "targets"
   [ load-targets ]
-  if agents = "all"
+  if agents = "everything"
   [ let input-file user-file
     if is-string? input-file
     [ import-world input-file ] ]
