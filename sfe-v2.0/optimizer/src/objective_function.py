@@ -6,14 +6,14 @@ import scipy.stats as stats
 
 # define the objective function to be minimized
 def func(x, *args):
-    scenario = args[0]          # name of the scenario
-    parameters = args[1]        # names of the parameters
-    values = args[2]            # values of the fixed parameters
-    num_samples = args[3]       # number of simulations
+    scenario = args[0]              # name of the scenario
+    parameters = [] + args[1]       # names of the parameters
+    values = [] + args[2]           # values of the fixed parameters
+    num_samples = args[3]           # number of simulations
     # convert the individual from a 1-D array into a list
     individual = x.tolist()
     #print(len(x))
-    values.extend(individual)
+    values += individual
     # get the instance of the singleton class
     manager = WorkspacePoolManager.get_manager()
     # run the simulation num_samples times and collect the results
