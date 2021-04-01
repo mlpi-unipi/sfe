@@ -62,7 +62,9 @@ to run-simulation [ parameter-names parameter-values ]
   set fitness -1
   setup
   while [ not stop-criteria? ] [ go ]
-  set fitness ticks
+  ifelse target-evolution-time > 0
+  [ set fitness -1 * target-average-percentage ]
+  [ set fitness ticks ]
 end
 
 to-report fitness-value
