@@ -1,0 +1,311 @@
+;; import the encoding of the scenario
+to import-scenario
+  let file-to-open path-scenario "scenario"
+  if file-exists? file-to-open
+  [ import-world file-to-open ]
+end
+
+;; return the relative path of the file that encodes the scenario
+;; the path depends on the selected scenario
+to-report path-scenario [ file-name ]
+  report (word "scenarios/" scenario "/" file-name)
+end
+
+;; import the values of the parameters from the configuration file
+to import-configuration
+  let input-file path-scenario "configuration.txt"
+  file-open input-file
+  while [ not file-at-end? ]
+  [ let read-line file-read-line
+    if not empty? read-line and not comment? read-line
+    [ let name parameter-name read-line
+      let value parameter-value read-line
+      if name = "evolution-time"
+      [ set target-evolution-time value ]
+      if name = "patch-side"
+      [ set patch-side value ]
+      if name = "swarm"
+      [ set swarm value ]
+      if name = "strategy"
+      [ set strategy-id value ]
+      if name = "drone-radius"
+      [ set drone-radius value ]
+      if name = "battery-life"
+      [ set drone-battery value ]
+      if name = "max-speed"
+      [ set drone-max-speed value ]
+      if name = "cruising-speed"
+      [ set drone-cruising-speed value ]
+      if name = "acceleration"
+      [ set drone-acceleration value ]
+      if name = "max-angular-speed"
+      [ set drone-max-angular-speed value ]
+      if name = "vision-radius"
+      [ set drone-vision-radius value ]
+      if name = "vision-angle"
+      [ set drone-vision-angle value ]
+      if name = "sensing-radius"
+      [ set drone-sensing-radius value ]
+      if name = "sensing-angle"
+      [ set drone-sensing-angle value ]
+      if name = "sensing-base"
+      [ set drone-sensing-base value ]
+      if name = "sensing-height"
+      [ set drone-sensing-height value ]
+      if name = "radius-top"
+      [ set mark-radius-top value ]
+      if name = "radius-down"
+      [ set mark-radius-down value ]
+      if name = "evaporation-rate"
+      [ set mark-evaporation-rate value ]
+      if name = "olfactory-habituation"
+      [ set olfactory-habituation value ]
+      if name = "repulsive-radius"
+      [ set repulsive-mark-radius value ]
+      if name = "repulsive-evaporation-rate"
+      [ set repulsive-mark-evaporation-rate value ]
+      if name = "wiggle-angle"
+      [ set wiggle-angle value ]
+      if name = "flock-angle"
+      [ set flock-angle value ]
+      if name = "separate-radius"
+      [ set separate-radius value ]
+      if name = "max-separate-turn"
+      [ set max-separate-turn value ]
+      if name = "align-radius"
+      [ set align-radius value ]
+      if name = "max-align-turn"
+      [ set max-align-turn value ]
+      if name = "cohere-radius"
+      [ set cohere-radius value ]
+      if name = "max-cohere-turn"
+      [ set max-cohere-turn value ]
+      if name = "agent-to-agent-coefficient"
+      [ set agent-to-agent-coefficient value ]
+      if name = "agent-to-intruder-coefficient"
+      [ set agent-to-intruder-coefficient value ]
+      if name = "decay-rate-coefficient"
+      [ set decay-rate-coefficient value ]
+      if name = "strategy-suppression"
+      [ set strategy-suppression value ]
+      if name = "critic-threshold"
+      [ set critic-threshold value ]
+      if name = "patrol-to-patrol"
+      [ set patrol-to-patrol value ]
+      if name = "patrol-to-detection"
+      [ set patrol-to-detection value ]
+      if name = "patrol-to-follow"
+      [ set patrol-to-follow value ]
+      if name = "detection-to-patrol"
+      [ set detection-to-patrol value ]
+      if name = "detection-to-detection"
+      [ set detection-to-detection value ]
+      if name = "detection-to-follow"
+      [ set detection-to-follow value ]
+      if name = "follow-to-patrol"
+      [ set follow-to-patrol value ]
+      if name = "follow-to-detection"
+      [ set follow-to-detection value ]
+      if name = "follow-to-follow"
+      [ set follow-to-follow value ]
+      if name = "patrol-to-target"
+      [ set patrol-to-target value ]
+      if name = "detection-to-target"
+      [ set detection-to-target value ]
+      if name = "follow-to-target"
+      [ set follow-to-target value ] ] ]
+  file-close
+end
+
+;; check if a read line is a comment
+to-report comment? [ read-line ]
+  if not empty? read-line
+  [ if first read-line = "#" [ report true ] ]
+  report false
+end
+
+to-report parameter-name [ read-line ]
+  let final-position position "=" read-line
+  let name substring read-line 0 final-position
+  set name remove " " name
+  report name
+end
+
+to-report parameter-value [ read-line ]
+  let start-position (position "=" read-line) + 1
+  let value substring read-line start-position length read-line
+  set value remove " " value
+  report read-from-string value
+end
+
+to save
+  if agents = "drones"
+  [ save-drones ]
+  if agents = "obstacles"
+  [ save-obstacles ]
+  if agents = "targets"
+  [ save-targets ]
+  if agents = "everything"
+  [ let output-file user-new-file ;; manually selected by the user
+    if is-string? output-file
+    [ export-world output-file ] ]
+end
+
+to save-drones
+  let output-file user-new-file
+  if is-string? output-file
+  [ carefully
+    [ file-delete output-file
+      file-open output-file ]
+    [ file-open output-file ]
+    ask drones
+    [ file-write color
+      file-write heading
+      file-write xcor
+      file-write ycor
+      file-write size ]
+    file-close ]
+end
+
+to save-obstacles
+  let output-file user-new-file
+  if is-string? output-file
+  [ carefully
+    [ file-delete output-file
+      file-open output-file ]
+    [ file-open output-file ]
+    ask patches with [ pcolor = gray or obstacle = true ]
+    [ file-write pxcor
+      file-write pycor
+      file-write pcolor ]
+    file-close ]
+end
+
+to save-targets
+  let output-file user-new-file
+  if is-string? output-file
+  [ carefully
+    [ file-delete output-file
+      file-open output-file ]
+    [ file-open output-file ]
+    ask patches with [ pcolor = red or target = true ]
+    [ file-write pxcor
+      file-write pycor
+      file-write pcolor ]
+    file-close ]
+end
+
+to load
+  if agents = "drones"
+  [ load-drones ]
+  if agents = "obstacles"
+  [ load-obstacles ]
+  if agents = "targets"
+  [ load-targets ]
+  if agents = "everything"
+  [ let input-file user-file
+    if is-string? input-file
+    [ import-world input-file ] ]
+end
+
+to load-drones
+  let input-file user-file
+  if is-string? input-file
+  [ file-open input-file
+    while [ not file-at-end? ]
+    [ let d-color file-read
+      let head file-read
+      let x-cor file-read
+      let y-cor file-read
+      let d-size file-read
+      create-drones 1
+      [ set color d-color
+        set heading head
+        set xcor x-cor
+        set ycor y-cor
+        set size d-size ] ]
+    file-close ]
+end
+
+to load-obstacles
+  let input-file user-file
+  if is-string? input-file
+  [ file-open input-file
+    while [ not file-at-end? ]
+    [ let x-cor file-read
+      let y-cor file-read
+      let p-color file-read
+      ask patch x-cor y-cor
+      [ set pcolor p-color
+        set obstacle true ] ]
+    file-close ]
+end
+
+to load-targets
+  let input-file user-file
+  if is-string? input-file
+  [ file-open input-file
+    while [ not file-at-end? ]
+    [ let x-cor file-read
+      let y-cor file-read
+      let p-color file-read
+      ask patch x-cor y-cor
+      [ set pcolor p-color
+        set target true ] ]
+    file-close ]
+end
+
+to load-configuration
+  (foreach parameters values
+    [ [ name value ] ->
+      (ifelse
+        name = "evolution-time" [ set target-evolution-time value ]
+        name = "patch-side" [ set patch-side value ]
+        name = "swarm" [ set swarm value ]
+        name = "strategy" [ set strategy-id value ]
+        name = "drone-radius" [ set drone-radius value ]
+        name = "battery-life" [ set drone-battery value ]
+        name = "max-speed" [ set drone-max-speed value ]
+        name = "cruising-speed" [ set drone-cruising-speed value ]
+        name = "acceleration" [ set drone-acceleration value ]
+        name = "max-angular-speed" [ set drone-max-angular-speed value ]
+        name = "vision-radius" [ set drone-vision-radius value ]
+        name = "vision-angle" [ set drone-vision-angle value ]
+        name = "sensing-radius" [ set drone-sensing-radius value ]
+        name = "sensing-angle" [ set drone-sensing-angle value ]
+        name = "sensing-base" [ set drone-sensing-base value ]
+        name = "sensing-height" [ set drone-sensing-height value ]
+        name = "radius-top" [ set mark-radius-top value ]
+        name = "radius-down" [ set mark-radius-down value ]
+        name = "evaporation-rate" [ set mark-evaporation-rate value ]
+        name = "olfactory-habituation" [ set olfactory-habituation value ]
+        name = "repulsive-radius" [ set repulsive-mark-radius value ]
+        name = "repulsive-evaporation-rate" [ set repulsive-mark-evaporation-rate value ]
+        name = "wiggle-angle" [ set wiggle-angle value ]
+        name = "flock-angle" [ set flock-angle value ]
+        name = "separate-radius" [ set separate-radius value ]
+        name = "max-separate-turn" [ set max-separate-turn value ]
+        name = "align-radius" [ set align-radius value ]
+        name = "max-align-turn" [ set max-align-turn value ]
+        name = "cohere-radius" [ set cohere-radius value ]
+        name = "max-cohere-turn" [ set max-cohere-turn value ]
+        name = "agent-to-agent-coefficient" [ set agent-to-agent-coefficient value ]
+        name = "agent-to-intruder-coefficient" [ set agent-to-intruder-coefficient value ]
+        name = "decay-rate-coefficient" [ set decay-rate-coefficient value ]
+        name = "strategy-suppression" [ set strategy-suppression value ]
+        name = "critic-threshold" [ set critic-threshold value ]
+        name = "patrol-to-patrol" [ set patrol-to-patrol value ]
+        name = "patrol-to-detection" [ set patrol-to-detection value ]
+        name = "patrol-to-follow" [ set patrol-to-follow value ]
+        name = "detection-to-patrol" [ set detection-to-patrol value ]
+        name = "detection-to-detection" [ set detection-to-detection value ]
+        name = "detection-to-follow" [ set detection-to-follow value ]
+        name = "follow-to-patrol" [ set follow-to-patrol value ]
+        name = "follow-to-detection" [ set follow-to-detection value ]
+        name = "follow-to-follow" [ set follow-to-follow value ]
+        name = "patrol-to-target" [ set patrol-to-target value ]
+        name = "detection-to-target" [ set detection-to-target value ]
+        name = "follow-to-target" [ set follow-to-target value ]) ])
+end
+
+; Copyright 2020 Manilo Monaco.

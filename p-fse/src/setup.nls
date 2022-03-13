@@ -1,0 +1,243 @@
+globals [
+  patch-side
+  max-ticks
+  swarm
+  deployment-time
+  strategy-id
+  attractive-stigmergy?
+  flocking?
+  repulsive-stigmergy?
+  ;; variables for python simulations
+  parameters
+  values
+  fitness
+]
+
+;; configure the environment and the coordination mechanisms
+to setup
+  setup-environment
+  setup-drawing
+  setup-statistics
+  setup-attractive-stigmergy
+  setup-flocking
+  setup-repulsive-stigmergy
+  setup-strategy
+  setup-ais                    ;; new
+  ;vid:start-recorder
+end
+
+to setup-environment
+  ifelse fitness = 0
+  [ import-scenario
+    import-configuration ]
+  [ load-configuration ]
+  setup-parameters
+  random-seed read-from-string substring date-and-time 9 12
+  setup-patches
+  setup-obstacles
+  setup-targets
+  setup-drones
+  reset-ticks
+end
+
+to setup-parameters
+  set target-evolution-time min2ticks target-evolution-time
+  set swarm round swarm
+  set drone-radius drone-radius / patch-side
+  set max-ticks min2ticks drone-battery
+  set drone-max-speed drone-max-speed / patch-side
+  set drone-cruising-speed drone-cruising-speed / patch-side
+  set drone-acceleration drone-acceleration / patch-side
+  set drone-deceleration -1 * drone-acceleration
+  set drone-max-angular-speed deg2rad drone-max-angular-speed
+  set drone-vision-radius drone-vision-radius / patch-side
+  set drone-sensing-radius drone-sensing-radius / patch-side
+  set drone-sensing-base drone-sensing-base / patch-side
+  set drone-sensing-height drone-sensing-height / patch-side
+end
+
+to setup-patches
+  ask patches with [ pcolor = black ]
+  [ set obstacle false
+    set locker-id -1
+    set visited 0
+    set target false
+    set state "null"
+    set target-intensity 0 ]
+end
+
+to setup-obstacles
+  set max-stuck-ticks 3
+  ask patches with [ pcolor = gray ]
+  [ set obstacle true
+    set locker-id -1
+    set visited 0
+    set target false
+    set state "null"
+    set target-intensity 0 ]
+end
+
+to setup-targets
+  set target-percentage-threshold 95
+  ask patches with [ pcolor = red ]
+  [ set obstacle false
+    set locker-id -1
+    set visited 0
+    set target true
+    set state "not-detected"
+    set target-intensity 1 ]
+  setup-dynamic-target
+end
+
+to setup-dynamic-target
+  set target-average-percentage 0
+  set target-time-slot -1 ;; the absolute value determines the deployment time of the drones
+  if dynamic-scenario?
+  [ let transition-period round (target-evolution-time / count-frames)
+    if transition-period = 0 [ set transition-period 1 ]
+    let evolution-time transition-period * count-frames
+    if target-evolution-time != evolution-time [ set target-evolution-time evolution-time ]
+    set deployment-time (abs target-time-slot) * transition-period
+    setup-target-pcolor ]
+end
+
+to setup-target-pcolor
+  set target-max-intensity 0
+  ask patches with [ obstacle = false ]
+  [ if max target-evolution > target-max-intensity [ set target-max-intensity max target-evolution ] ]
+  set target-min-intensity target-max-intensity
+  ask patches with [ obstacle = false ]
+  [ if not empty? (remove 0 target-evolution)
+    [ if min (remove 0 target-evolution) < target-min-intensity
+      [ set target-min-intensity min (remove 0 target-evolution) ] ] ]
+end
+
+to setup-drones
+  if count drones = 0 [ deploy-drones ]
+  ;; root of 2 is the worst case for the width of the gap
+  set drone-gap-angle asin ( sqrt 2 / drone-vision-radius ) * 2
+  ;; space equal to speed per time
+  set drone-motion-radius drone-cruising-speed + sqrt 2
+  ask one-of drones [ set drone-motion-angle max-yaw-angle * 2 ]
+  ask drones
+  [ set color green
+    set size 3
+    set sighted-obstacles no-patches
+    set locked-patches no-patches
+    set last-xcor xcor
+    set last-ycor ycor
+    set stuck-ticks 0
+    set speed 0
+    set yaw 0
+    set detector? false ]
+end
+
+to deploy-drones
+  let deployment-radius 0
+  ifelse world-width <= world-height
+  [ set deployment-radius world-width / 10 ]
+  [ set deployment-radius world-height / 10 ]
+  let deployment-set no-patches
+  ask patch min-pxcor max-pycor
+  [ set deployment-set (patch-set deployment-set patches in-radius deployment-radius with [ obstacle = false ]) ]
+  ask patch min-pxcor min-pycor
+  [ set deployment-set (patch-set deployment-set patches in-radius deployment-radius with [ obstacle = false ]) ]
+  ask patch max-pxcor min-pycor
+  [ set deployment-set (patch-set deployment-set patches in-radius deployment-radius with [ obstacle = false ]) ]
+  ask patch max-pxcor max-pycor
+  [ set deployment-set (patch-set deployment-set patches in-radius deployment-radius with [ obstacle = false ]) ]
+  while [ count drones < swarm ]
+  [ ask one-of deployment-set
+    [ if neighbors with [ obstacle = true ] = no-patches and count drones-here = 0 and count drones-on neighbors = 0
+      [ sprout-drones 1
+        [ face patch 0 0
+          wiggle ] ] ] ]
+end
+
+to setup-drawing
+  set mouse-one-click? false
+end
+
+to setup-statistics
+  set obstacles-collisions 0
+  set drones-collisions 0
+  set covering-percentage 0
+  set detectors-percentage 0
+end
+
+to setup-attractive-stigmergy
+  set mark-max-pheromone 1
+  set trail-max-pheromone 3
+  ask patches
+  [ set attractive-trail-pheromone 0
+    set attraction 0 ]
+  ask drones [ set sniffing-ticks 0 ]
+end
+
+to setup-flocking
+  ask drones
+  [ set flockmates no-patches
+    set nearest-flockmate nobody ]
+end
+
+to setup-repulsive-stigmergy
+  set repulsive-mark-max-pheromone 1
+  set repulsive-trail-max-pheromone 3
+  ask patches
+  [ set repulsive-trail-pheromone 0
+    set repulsion 0 ]
+end
+
+to setup-strategy
+  if strategy-id = 0 ;; only repulsive stigmergy (and randomness)
+  [ set attractive-stigmergy? false
+    set flocking? false
+    set repulsive-stigmergy? true ]
+  if strategy-id = 1 ;; flocking and repulsive-stigmergy
+  [ set attractive-stigmergy? false
+    set flocking? true
+    set repulsive-stigmergy? true ]
+  if strategy-id = 2 ;; attractive-stigmergy and repulsive-stigmergy
+  [ set attractive-stigmergy? true
+    set flocking? false
+    set repulsive-stigmergy? true ]
+  if strategy-id = 3 ;; attractive-stigmergy, flocking and repulsive-stigmergy
+  [ set attractive-stigmergy? true
+    set flocking? true
+    set repulsive-stigmergy? true ]
+end
+
+to setup-ais                                                 ;; new
+  set strategies []
+  set operation-modes []
+  set detection-range mark-radius-down
+  set communication-range cohere-radius
+  ask drones
+  [ set strategies-concentrations []
+    set strategies-activations []
+    set active-strategy "repulsive-stigmergy" ]
+  if repulsive-stigmergy?
+  [ set strategies lput "repulsive-stigmergy" strategies
+    set operation-modes lput "patrol" operation-modes
+    ask drones
+    [ set strategies-concentrations lput 0.5 strategies-concentrations
+      set strategies-activations lput 0.5 strategies-activations ] ]
+  if attractive-stigmergy?
+  [ set strategies lput "attractive-stigmergy" strategies
+    set operation-modes lput "detection" operation-modes
+    ask drones
+    [ set strategies-concentrations lput 0.5 strategies-concentrations
+      set strategies-activations lput 0.5 strategies-activations ] ]
+  if flocking?
+  [ set strategies lput "flocking" strategies
+    set operation-modes lput "follow" operation-modes
+    ask drones
+    [ set strategies-concentrations lput 0.5 strategies-concentrations
+      set strategies-activations lput 0.5 strategies-activations ] ]
+end
+
+to-report min2ticks [ minutes ]
+  report minutes * 60
+end
+
+; Copyright 2020 Manilo Monaco.

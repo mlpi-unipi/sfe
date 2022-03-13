@@ -1,0 +1,159 @@
+globals [
+  drone-vision-radius
+  drone-vision-angle
+  drone-gap-angle
+  drone-motion-radius
+  drone-motion-angle
+  max-stuck-ticks
+]
+
+patches-own [
+  obstacle
+  locker-id
+  visited
+]
+
+to avoid-obstacles
+  ask drones
+  [ ifelse not obstacle?
+    [ accelerate ]
+    [ decelerate ] ]
+end
+
+;; check if the drone has any obstacles in front of it
+to-report obstacle?
+  let min-yaw 0
+  set sighted-obstacles visible-obstacles drone-vision-radius drone-vision-angle
+  if any? sighted-obstacles
+  [ set min-yaw yaw-towards-gap ]
+  report obstacle-avoidance? min-yaw
+end
+
+;; return sighted obstacles (real obstacles and locked patches)
+to-report visible-obstacles [ vision-radius vision-angle ]
+  let obstacles patches in-cone vision-radius vision-angle with [ obstacle = true ]
+  let locked locked-by-others vision-radius vision-angle
+  report (patch-set obstacles locked)
+end
+
+;; return patches locked by other drones
+to-report locked-by-others [ vision-radius vision-angle ]
+  report patches in-cone vision-radius vision-angle with [ obstacle = false and locker-id != -1 and locker-id != [ who ] of myself ]
+end
+
+;; return the yaw rotation towards a free gap
+to-report yaw-towards-gap
+  let angles-list heading-obstacles-angles
+  report min-yaw-towards-gap angles-list
+end
+
+;; return a list of angles between heading and obstacles
+to-report heading-obstacles-angles
+  let xcor-list []
+  let ycor-list []
+  ;; get obstacles coordinates
+  ask sighted-obstacles
+  [ set xcor-list lput pxcor xcor-list
+    set ycor-list lput pycor ycor-list ]
+  let angles-list []
+  (foreach xcor-list ycor-list
+    [ [ x-cor y-cor ] ->
+      if x-cor != xcor or y-cor != ycor
+      [ ;; get angle between drone heading and obstacle in position x-cor y-cor
+        let angle subtract-headings towardsxy x-cor y-cor heading
+        set angles-list lput angle angles-list ] ])
+  let max-left-angle -1 * drone-vision-angle / 2
+  let max-right-angle drone-vision-angle / 2
+  set angles-list lput max-left-angle angles-list
+  set angles-list lput max-right-angle angles-list
+  report angles-list
+end
+
+;; return the minimum yaw rotation towards a free gap
+to-report min-yaw-towards-gap [ angles ]
+  let angles-list sort angles
+  let min-yaw 361
+  let index 1
+  ;; for each consecutive pair of angles, check for a gap at least equal to drone-gap-angle
+  while [ index < length angles-list ]
+  [ let previous item (index - 1) angles-list
+    let current item index angles-list
+    let gap abs (previous - current)
+    ;; calculate the yaw rotation towards the center of the gap
+    let yaw-angle (previous + current) / 2
+    if gap > drone-gap-angle and abs yaw-angle < abs min-yaw
+    [ ;; select the minimum rotation
+      set min-yaw yaw-angle ]
+    set index index + 1 ]
+  ;; check if no gap is available
+  if min-yaw = 361 [ set min-yaw 0 ]
+  report min-yaw
+end
+
+;; perform the obstacle avoidance behavior
+to-report obstacle-avoidance? [ yaw-angle ]
+  obstacle-avoidance yaw-angle
+  let locked-in-cone locked-by-others drone-vision-radius drone-vision-angle
+  if any? locked-in-cone
+  [ report true ]
+  let obstacles-in-gap-cone visible-obstacles drone-vision-radius drone-gap-angle
+  ifelse any? obstacles-in-gap-cone
+  [ report true ]
+  [ report false ]
+end
+
+;; perform the tasks of the obstacle avoidance behavior
+to obstacle-avoidance [ yaw-angle ]
+  ;; check if the drone is stuck
+  ifelse stuck?
+  [ ;; if the drone is stuck, then rotate a random angle
+    rotate-randomly
+    set stuck-ticks 0 ]
+  [ ;; if a gap is available, then the drone rotate towards the gap
+    rotate yaw-angle ]
+end
+
+;; check if the drone is stuck for at least max-stuck-ticks
+to-report stuck?
+  ifelse speed = 0 or (xcor = last-xcor and ycor = last-ycor)
+  [ set stuck-ticks stuck-ticks + 1 ]
+  [ set stuck-ticks 0
+    set last-xcor xcor
+    set last-ycor ycor ]
+  ifelse stuck-ticks >= max-stuck-ticks
+  [ report true ]
+  [ report false ] 
+end
+
+;; each drone reserves same patches in front of it in order to avoid collisions
+to schedule-patches
+  ask drones
+  [ unlock-patches
+    set-visited ]
+  ask drones
+  [ lock-patches ]
+end
+
+;; release the locked patches
+to unlock-patches
+ if any? locked-patches
+ [ ask locked-patches
+   [ set locker-id -1 ] ]
+end
+
+;; book the free patches in cone of motion
+to lock-patches
+  let patches-to-lock patches in-cone drone-motion-radius drone-motion-angle with [ locker-id = -1 ]
+  set patches-to-lock (patch-set patch-here patches-to-lock)
+  ask patches-to-lock
+  [ set locker-id [ who ] of myself ]
+  set locked-patches patches-to-lock
+end
+
+;; set patch as visited
+to set-visited
+  ask patch-here
+  [ set visited visited + 1 ]  
+end
+
+; Copyright 2020 Manilo Monaco.

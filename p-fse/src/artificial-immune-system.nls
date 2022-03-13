@@ -1,0 +1,141 @@
+globals [
+  strategies                      ;; list of the names of the strategies on board
+  operation-modes                 ;; list of modes of operation of the strategies
+  detection-range                 ;; range of detected targets (set as mark-radius-down)
+  communication-range             ;; communication range with other agents (set as cohere-radius)
+  ;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;; TUNING PARAMETERS ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;
+  agent-to-agent-coefficient      ;; weight of the agent-to-agent interaction on the total strategy strength
+  agent-to-intruder-coefficient   ;; weight of the intruder effect on the total strategy strength
+  decay-rate-coefficient          ;; decay rate coefficient
+  strategy-suppression            ;; tuning parameter that controls the current strategy strength suppression
+  critic-threshold                ;; maximum number of neighboring agents that can perform the same strategy
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;; MUTUAL INTERACTION WEIGHTING COEFFICIENTS ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  patrol-to-patrol
+  patrol-to-detection
+  patrol-to-follow
+  detection-to-patrol
+  detection-to-detection
+  detection-to-follow
+  follow-to-patrol
+  follow-to-detection
+  follow-to-follow
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;; DRONE-TO-TARGET INTERACTION WEIGHTING COEFFICIENTS ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  patrol-to-target
+  detection-to-target
+  follow-to-target
+]
+
+;; apply artificial immune system-based coordination
+to apply-ais
+  decide-active-strategy
+  apply-thymus-enhanced
+  execute-strategy
+end
+
+to decide-active-strategy
+  ask drones
+  [ set strategies-concentrations strategies-activations
+    let i 0   ;; index to iterate on strategies aboard each drone
+    while [ i < length strategies ]
+    [ ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ;;; COMPUTE MUTUAL-INTERACTION BETWEEN AGENTS ;;;
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      let mutual-interaction-i 0
+      let impacting-drones other drones in-radius communication-range
+      let j 0   ;; index to iterate on strategies aboard other drones
+      while [ j < length strategies ]
+      [ let mdd-coefficient mutual-interaction-coefficient item i strategies item j strategies
+        ask impacting-drones
+        [ set mutual-interaction-i mutual-interaction-i + (mdd-coefficient * item j strategies-concentrations * item i [ strategies-concentrations ] of myself) ]
+        set j (j + 1) ]
+      set mutual-interaction-i mutual-interaction-i * (agent-to-agent-coefficient / length strategies)
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ;;; COMPUTE ENVIRONMENT STIMULATION ;;;
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      let environment-stimulation-i 0
+      let mdt-coefficient drone-to-target-interaction-coefficient item i strategies
+      let impacting-targets patches in-radius detection-range with [ pcolor = yellow ]
+      ask impacting-targets
+      [ let phi 1 - (distance myself / detection-range)
+        set environment-stimulation-i environment-stimulation-i + (mdt-coefficient * phi * item i [ strategies-concentrations ] of myself) ]
+      set environment-stimulation-i environment-stimulation-i * agent-to-intruder-coefficient
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ;;; COMPUTE NATURAL DEMISE ;;;
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      let natural-demise-i -1 * decay-rate-coefficient * item i strategies-concentrations
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ;;; COMPUTE STRATEGY STRENGTH AND ACTIVATION ;;;
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      let strength-i mutual-interaction-i + environment-stimulation-i + natural-demise-i
+      let activation-i 1 / (1 + exp (-1 * strategy-suppression * strength-i))
+      set strategies-activations replace-item i strategies-activations activation-i
+      set i (i + 1) ]
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;;; DECISION-MAKING STEP ;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    set active-strategy item position max strategies-activations strategies-activations strategies ]
+end
+
+
+
+to-report mutual-interaction-coefficient [ strategy-i strategy-j ]
+  (ifelse
+    item position strategy-i strategies operation-modes = "patrol"
+    [ (ifelse
+      item position strategy-j strategies operation-modes = "patrol" [ report patrol-to-patrol ]
+      item position strategy-j strategies operation-modes = "detection" [ report patrol-to-detection ]
+      item position strategy-j strategies operation-modes = "follow" [ report patrol-to-follow ]) ]
+    item position strategy-i strategies operation-modes = "detection"
+    [ (ifelse
+      item position strategy-j strategies operation-modes = "patrol" [ report detection-to-patrol ]
+      item position strategy-j strategies operation-modes = "detection" [ report detection-to-detection ]
+      item position strategy-j strategies operation-modes = "follow" [ report detection-to-follow ]) ]
+    item position strategy-i strategies operation-modes = "follow"
+    [ (ifelse
+      item position strategy-j strategies operation-modes = "patrol" [ report follow-to-patrol ]
+      item position strategy-j strategies operation-modes = "detection" [ report follow-to-detection ]
+      item position strategy-j strategies operation-modes = "follow" [ report follow-to-follow ]) ])
+end
+
+to-report drone-to-target-interaction-coefficient [ strategy-i ]
+  (ifelse
+    item position strategy-i strategies operation-modes = "patrol" [ report patrol-to-target ]
+    item position strategy-i strategies operation-modes = "detection" [ report detection-to-target ]
+    item position strategy-i strategies operation-modes = "follow" [ report follow-to-target ])
+end
+
+to apply-thymus-enhanced
+  ask drones
+  [ let same-strategy-neighbors-count 0
+    let neighbors-drones other drones in-radius communication-range
+    ask neighbors-drones
+    [ if active-strategy = [ active-strategy ] of myself
+      [ set same-strategy-neighbors-count same-strategy-neighbors-count + 1 ] ]
+    if same-strategy-neighbors-count >= critic-threshold
+    [ set active-strategy item position item 1 sort-by > strategies-activations strategies-activations strategies
+      set strategies-activations replace-item position max strategies-activations strategies-activations strategies-activations item 1 sort-by > strategies-activations ] ]
+end
+
+to execute-strategy
+  ask drones
+  [ reset-yaw
+    (ifelse
+    active-strategy = "repulsive-stigmergy"
+    [ set color violet
+      downhill-pheromone
+      wiggle ]
+    active-strategy = "attractive-stigmergy"
+    [ set color lime
+      if not uphill-pheromone? [ wiggle ] ]
+    active-strategy = "flocking"
+    [ set color sky
+      if not flock? [ wiggle ] ]) ]
+end
+
+; Copyright 2021 Manilo Monaco.

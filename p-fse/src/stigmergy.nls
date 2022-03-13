@@ -1,0 +1,201 @@
+globals [
+  mark-radius-top
+  mark-radius-down
+  mark-evaporation-rate
+  mark-max-pheromone
+  trail-max-pheromone
+  olfactory-habituation
+  repulsive-mark-radius
+  repulsive-mark-evaporation-rate
+  repulsive-mark-max-pheromone
+  repulsive-trail-max-pheromone
+  wiggle-angle
+]
+
+patches-own [
+  attractive-trail-pheromone ;; starting amount of attractive pheromone in this patch since the last release
+  attraction                 ;; amount of attractive pheromone in this patch
+  repulsive-trail-pheromone  ;; starting amount of repulsive pheromone in this patch since the last release
+  repulsion                  ;; amount of repulsive pheromone in this patch
+]
+
+;;;;;;;;;;;;;;;;;;;
+;;; EVAPORATION ;;;
+;;;;;;;;;;;;;;;;;;;
+
+;; perform the linear evaporation of the pheromone
+to evaporate
+  if repulsive-stigmergy?
+  [ ask patches with [ repulsion > 0 ]
+    [ set repulsion repulsion - (repulsive-trail-pheromone * repulsive-mark-evaporation-rate)
+      if repulsion <= 0
+      [ set repulsion 0
+        set repulsive-trail-pheromone 0 ]
+      ;update-repulsive-pheromone ] ]
+    ] ]
+  if attractive-stigmergy?
+  [ ask patches with [ attraction > 0 ]
+    [ set attraction attraction - (attractive-trail-pheromone * mark-evaporation-rate)
+      if attraction <= 0
+      [ set attraction 0
+        set attractive-trail-pheromone 0 ]
+      update-attractive-pheromone ] ]
+end
+
+;;;;;;;;;;;;;;;
+;;; RELEASE ;;;
+;;;;;;;;;;;;;;;
+
+to release-pheromones
+  ask drones
+  [ release-repulsive-pheromone
+    ;; detect one target in the sensing area
+    let new-detected-target detected-target
+    if new-detected-target != nobody
+    [ ;; release a pheromone mark centered on the nearest detected target
+      release-attractive-pheromone new-detected-target ] ]
+end
+
+;; release an attractive pheromone mark centered on the target-patch
+to release-attractive-pheromone [ target-patch ]
+  if attractive-stigmergy?
+  [ ask target-patch
+    [ ask patches in-radius mark-radius-down with [ obstacle != true ]
+      [ let distance-to-release distance myself
+        let new-pheromone mark-pheromone distance-to-release
+        ;; more pheromone marks aggregate into a trail
+        set attractive-trail-pheromone attraction + new-pheromone
+        set attraction attractive-trail-pheromone
+        if attractive-trail-pheromone > trail-max-pheromone
+        [ set attractive-trail-pheromone trail-max-pheromone
+          set attraction attractive-trail-pheromone ]
+        set repulsion 0
+        set repulsive-trail-pheromone 0
+        update-attractive-pheromone ] ] ]
+end
+
+;; return the amount of pheromone in the mark based on distance to release
+to-report mark-pheromone [ distance-to-release ]
+  if distance-to-release < mark-radius-top
+  [ set distance-to-release mark-radius-top ]
+  ;; the pheromone mark is shaped like a truncated cone
+  report mark-max-pheromone * (mark-radius-down - distance-to-release) / (mark-radius-down - mark-radius-top)
+end
+
+;; release a repulsive pheromone mark centered on the patch-here
+to release-repulsive-pheromone
+  if repulsive-stigmergy?
+  [ if not any? target-in-sensing-area
+    [ ask patch-here
+      [ ask patches in-radius repulsive-mark-radius with [ obstacle != true and attraction <= 0 ]
+        [ let new-pheromone mark-repulsive-pheromone distance myself
+          ;; more pheromone marks aggregate into a trail
+          set repulsive-trail-pheromone repulsion + new-pheromone
+          set repulsion repulsive-trail-pheromone
+          if repulsive-trail-pheromone > repulsive-trail-max-pheromone
+          [ set repulsive-trail-pheromone repulsive-trail-max-pheromone
+            set repulsion repulsive-trail-pheromone ]
+          ;update-repulsive-pheromone ] ] ] ]
+        ] ] ] ]
+end
+
+;; return the amount of repulsive pheromone in the mark based on distance to release
+to-report mark-repulsive-pheromone [ distance-to-release ]
+  ;; the pheromone mark is shaped like a cone
+  report repulsive-mark-max-pheromone * (repulsive-mark-radius - distance-to-release) / repulsive-mark-radius
+end
+
+;;;;;;;;;;;;;;;;;;
+;;; ATTRACTION ;;;
+;;;;;;;;;;;;;;;;;;
+
+;; check the presence of attractive pheromone and steer to the maximum amount
+to-report attraction-behavior?
+  if attractive-stigmergy?
+  [ ifelse [ attraction ] of patch-here = 0
+    [ set sniffing-ticks 0 ]
+    [ set sniffing-ticks sniffing-ticks + 1 ]
+    if not olfactory-habituation?
+    [ report uphill-pheromone? ] ]
+  report false
+end
+
+;; check the olfactory habituation state
+to-report olfactory-habituation?
+  report sniffing-ticks >= olfactory-habituation
+end
+
+;; sniff ahead, right and left, and go where the strongest smell is
+to-report uphill-pheromone?
+  let pheromone-ahead attraction-at-angle 0
+  let pheromone-right attraction-at-angle 45
+  let pheromone-left attraction-at-angle -45
+  if pheromone-ahead = 0 and pheromone-right = 0 and pheromone-left = 0 [ report false ]
+  if (pheromone-right > pheromone-ahead) or (pheromone-left > pheromone-ahead)
+  [ ifelse pheromone-right > pheromone-left
+    [ rotate 45 ]
+    [ rotate -45 ] ]
+  report true
+end
+
+to-report attraction-at-angle [ angle ]
+  let p patch-right-and-ahead angle drone-cruising-speed
+  if p = nobody [ report 0 ]
+  report [ attraction ] of p
+end
+
+;;;;;;;;;;;;;;;;;
+;;; REPULSION ;;;
+;;;;;;;;;;;;;;;;;
+
+;; check the presence of repulsive pheromone and steer to the minimum amount
+to repulsion-behavior
+  if repulsive-stigmergy?
+  [ downhill-pheromone ]
+end
+
+;; sniff ahead, right and left, and go where the least strong smell is
+to downhill-pheromone
+  ;let angle asin (sqrt 2 / (repulsive-mark-radius + drone-cruising-speed))
+  let angle asin (drone-cruising-speed / (repulsive-mark-radius + drone-cruising-speed))
+  let pheromone-ahead repulsion-at-angle 0
+  let pheromone-right repulsion-at-angle angle
+  let pheromone-left repulsion-at-angle (-1 * angle)
+  if (pheromone-right < pheromone-ahead) or (pheromone-left < pheromone-ahead)
+  [ ifelse pheromone-right < pheromone-left
+    [ rotate angle ]
+    [ rotate (-1 * angle) ] ]
+end
+
+to-report repulsion-at-angle [ angle ]
+  let p patch-right-and-ahead angle (repulsive-mark-radius + drone-cruising-speed)
+  if p = nobody or [ obstacle ] of p = true [ report repulsive-trail-max-pheromone ]
+  report [ repulsion ] of p
+end
+
+;;;;;;;;;;;;;;;
+;;; UTILITY ;;;
+;;;;;;;;;;;;;;;
+
+;; the amount of attractive pheromone determines the color
+to update-attractive-pheromone
+  if target != true
+  [ ifelse attraction > trail-max-pheromone
+    [ set pcolor blue + 4.9 ] ;; saturation color
+    [ set pcolor (blue + 4.9) - 9.9 * (1 - (attraction / trail-max-pheromone)) ] ]
+end
+
+;; the amount of repulsive pheromone determines the color
+to update-repulsive-pheromone
+  if target != true
+  [ ifelse repulsion > repulsive-trail-max-pheromone
+    [ set pcolor violet + 4.9 ] ;; saturation color
+    [ set pcolor (violet + 4.9) - 9.9 * (1 - (repulsion / repulsive-trail-max-pheromone)) ] ]
+end
+
+to wiggle
+  rotate random wiggle-angle
+  rotate (-1 * random wiggle-angle)
+end
+
+; Copyright 2020 Manilo Monaco.

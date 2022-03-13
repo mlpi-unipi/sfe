@@ -1,0 +1,50 @@
+globals [
+  obstacles-collisions
+  drones-collisions
+  covering-percentage
+  detectors-percentage
+]
+
+;; check the collisions with other drones and obstacles
+to check-collisions
+  ask drones
+  [ drone-collision
+    obstacle-collision ]
+end
+
+;; check the collision with another drone and increase the number of collisions
+to drone-collision
+  if count other drones in-radius (drone-radius * 2) >= 1
+  [ set drones-collisions drones-collisions + 1 ]
+end
+
+;; check the collision with an obstacle and increase the number of collisions
+to obstacle-collision
+  let nearest-obstacle min-one-of patches in-radius drone-radius with [ obstacle = true ] [ distance myself ]
+  if nearest-obstacle != nobody
+  [ set obstacles-collisions obstacles-collisions + 1 ]
+end
+
+;; return the percentage of detected targets
+to-report detected-target-percentage
+  ifelse count-target = 0
+  [ report 0 ]
+  [ report (count-detected / count-target) * 100 ]
+end
+
+;; return the count of detected targets
+to-report count-detected
+  report count patches with [ target = true and state = "detected" ]
+end
+
+;; return the count of targets in the scenario
+to-report count-target
+  report count patches with [ target = true ]
+end
+
+to check-statistics
+  set covering-percentage (count patches with [ visited > 0 and obstacle = false ] / count patches with [ obstacle = false ]) * 100
+  set detectors-percentage (count drones with [ detector? = true ] / count drones) * 100
+end
+
+; Copyright 2020 Manilo Monaco.

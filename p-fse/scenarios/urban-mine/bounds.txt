@@ -1,0 +1,66 @@
+# environment parameters
+evolution-time=0
+patch-side=1
+swarm=80
+strategy=3
+
+# drone parameters
+drone-radius=0.2
+battery-life=24
+max-speed=8.5
+cruising-speed=1
+acceleration=0.5
+max-angular-speed=120
+
+# obstacle avoidance parameters
+vision-radius=5
+vision-angle=60
+
+# sensing parameters
+sensing-radius=2.5
+sensing-angle=360
+sensing-base=5
+sensing-height=4
+
+# attractive stigmergy parameters
+radius-top=(0,10)
+radius-down=(0,20)
+evaporation-rate=(0.01,1)
+olfactory-habituation=(1,60)
+
+# repulsive stigmergy parameters
+repulsive-radius=(0,10)
+repulsive-evaporation-rate=(0.01,1)
+wiggle-angle=(1,15)
+
+# flocking parameters
+flock-angle=(90,360)
+separate-radius=(5,10)
+max-separate-turn=(0,20)
+align-radius=(5,15)
+max-align-turn=(0,20)
+cohere-radius=(5,20)
+max-cohere-turn=(0,20)
+
+# artificial immune system parameters
+agent-to-agent-coefficient=(0.1,1)
+agent-to-intruder-coefficient=(0.1,1)
+decay-rate-coefficient=(0.01,1)
+strategy-suppression=(0.1,1)
+critic-threshold=(1,10)
+
+# mutual interaction weighting coefficients
+patrol-to-patrol=(-1,1)
+patrol-to-detection=(-1,1)
+patrol-to-follow=(-1,1)
+detection-to-patrol=(-1,1)
+detection-to-detection=(-1,1)
+detection-to-follow=(-1,1)
+follow-to-patrol=(-1,1)
+follow-to-detection=(-1,1)
+follow-to-follow=(-1,1)
+
+# drone-to-target interaction weighting coefficients
+patrol-to-target=(-1,1)
+detection-to-target=(-1,1)
+follow-to-target=(-1,1)

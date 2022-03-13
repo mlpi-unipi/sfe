@@ -1,0 +1,115 @@
+globals [
+  drone-radius
+  drone-battery
+  drone-max-speed
+  drone-cruising-speed
+  drone-acceleration
+  drone-deceleration
+  drone-max-angular-speed
+]
+
+breed [ drones drone ]
+
+drones-own [
+  sighted-obstacles ;; agentset of obstacles in vision cone
+  locked-patches    ;; agentset of patches in motion cone
+  last-xcor
+  last-ycor
+  stuck-ticks
+  sniffing-ticks
+  flockmates        ;; agentset of nearby drones
+  nearest-flockmate
+  speed
+  yaw
+  detector?
+  ;;;;;;;;;;;
+  ;;; AIS ;;;
+  ;;;;;;;;;;;
+  strategies-concentrations   ;; list of squashed versions of the strategies strength values [c(t-1)]
+  strategies-activations      ;; list of the current activation values of the strategies [c(t)]
+  active-strategy             ;; currently active strategy
+]
+
+;; perform uniform acceleration
+to accelerate
+  let new-speed speed + drone-acceleration * 1 ;; tick = second
+  ifelse new-speed <= drone-cruising-speed
+  [ set speed new-speed ]
+  [ set speed drone-cruising-speed ]
+end
+
+;; perform uniform deceleration
+to decelerate
+  let new-speed speed + drone-deceleration * 1 ;; tick = second
+  ifelse new-speed >= 0
+  [ set speed new-speed ]
+  [ set speed 0 ]
+end
+
+;; perform a yaw rotation
+to rotate [ yaw-angle ]
+  let max-yaw max-yaw-angle
+  set max-yaw max-yaw - yaw
+  ifelse abs yaw-angle <= max-yaw
+  [ rt yaw-angle
+    set yaw yaw + abs yaw-angle ]
+  [ if-else yaw-angle < 0
+    [ lt max-yaw ]
+    [ rt max-yaw ]
+    set yaw yaw + max-yaw ]
+end
+
+;; calculate the maximum yaw angle in degrees
+to-report max-yaw-angle
+  let theta-0 0
+  let delta-t 1 / 2 ;; half of a tick
+  let omega 0
+  let alfa drone-max-angular-speed / delta-t
+  let -alfa (-1 * alfa)
+  let theta-f rotation-angle theta-0 delta-t omega alfa
+  set omega angular-speed delta-t omega alfa
+  set theta-f rotation-angle theta-f delta-t omega -alfa
+  set omega angular-speed delta-t omega -alfa
+  report rad2deg theta-f ;; from radians to degrees
+end
+
+;; perform uniformly accelerated circular motion
+to-report rotation-angle [ theta-0 delta-t angular-speed-0 angular-acceleration ]
+  report theta-0 + (angular-speed-0 * delta-t) + ((1 / 2) * angular-acceleration * delta-t * delta-t)
+end
+
+;; perform angular acceleration or deceleration and return the final angular speed
+to-report angular-speed [ delta-t angular-speed-0 angular-acceleration ]
+  report angular-speed-0 + angular-acceleration * delta-t
+end
+
+;; convert radians to degrees
+to-report rad2deg [ rad ]
+  report rad * 180 / pi
+end
+
+;; convert degrees to radians
+to-report deg2rad [ deg ]
+  report deg * pi / 180
+end
+
+;; rotate a feasible yaw angle
+to rotate-randomly
+  let max-yaw max-yaw-angle
+  let random-yaw random-sign * random max-yaw
+  rotate random-yaw
+end
+
+;; return a random sign for the rotation
+to-report random-sign
+  let num random 2
+  if num = 0 [ report -1 ]
+  if num = 1 [ report 1 ]
+end
+
+;; reset the temporary yaw rotation of the drone
+to reset-yaw
+  set yaw 0
+end
+
+; Copyright 2020 Manilo Monaco.
